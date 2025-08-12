@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Foot - Play to Earn on Solana</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script type="module" src="src/game.js"></script>
+    <style>
+        body { margin: 0; background: #000; }
+        #game-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        button { padding: 10px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div id="wallet-ui">
+        <button id="connect-wallet">Connect Solana Wallet</button>
+        <button id="pay-entry" disabled>Pay 0.02 SOL to Play</button>
+    </div>
+    <div id="game-container" style="display: none;"></div>
+</body>
+</html>
