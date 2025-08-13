@@ -3,8 +3,6 @@ import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { WalletProvider, ConnectionProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
-console.log('Script loaded - imports complete');  // Debug: Confirms script starts
-
 const wallets = [new PhantomWalletAdapter()];
 const connection = new Connection('https://api.devnet.solana.com');
 const TREASURY_PUBKEY = new PublicKey('9euu6jdRP2Uhi3qYihptK3aVLx8Gj1w6R3ALhLjr8XDN');  // Your Treasury PDA
@@ -27,10 +25,7 @@ function App() {
     const wallet = useWallet();
     const [gameStarted, setGameStarted] = React.useState(false);
 
-    console.log('App component rendered');  // Debug: Confirms React mounts
-
     async function payEntry() {
-        console.log('Pay button clicked');  // Debug: Confirms click event
         if (!wallet.connected) return alert('Connect wallet first!');
         try {
             const tx = new Transaction().add(
@@ -52,7 +47,6 @@ function App() {
     }
 
     React.useEffect(() => {
-        console.log('useEffect ran - wallet connected:', wallet.connected);  // Debug: Confirms effect and button setup
         document.getElementById('pay-entry').onclick = payEntry;
         document.getElementById('pay-entry').disabled = !wallet.connected;
     }, [wallet.connected]);
@@ -71,11 +65,8 @@ ReactDOM.render(
     document.getElementById('wallet-ui')
 );
 
-console.log('React render complete');  // Debug: Confirms mount
-
 // Phaser Game
 function startGame() {
-    console.log('startGame called');  // Debug: Confirms game init
     const config = {
         type: Phaser.AUTO,
         width: 288,
@@ -87,22 +78,20 @@ function startGame() {
     const game = new Phaser.Game(config);
 
     let foot, pipes, score = 0, scoreText, gameOver = false, startTime;
-    const flapSound = new Audio('assets/flap.mp3');
-    const scoreSound = new Audio('assets/score.mp3');
-    const dieSound = new Audio('assets/die.mp3');
+    const flapSound = new Audio('assets/audio_wing.ogg');  // Updated to .ogg from your repo
+    const scoreSound = new Audio('assets/audio_point.ogg');  // Updated to .ogg
+    const dieSound = new Audio('assets/audio_die.ogg');  // Updated to .ogg
 
     function preload() {
-        console.log('Phaser preload');  // Debug: Assets loading
-        this.load.image('background', 'assets/background.png');
-        this.load.image('ground', 'assets/ground.png');
-        this.load.image('pipe', 'assets/pipe.png');
-        this.load.image('foot-up', 'assets/foot-up.png');
-        this.load.image('foot-mid', 'assets/foot-mid.png');
-        this.load.image('foot-down', 'assets/foot-down.png');
+        this.load.image('background', 'assets/background-day.png');  // Exact name from repo
+        this.load.image('ground', 'assets/base.png');  // Exact name
+        this.load.image('pipe', 'assets/pipe-green.png');  // Exact name
+        this.load.image('foot-up', 'assets/yellowbird-upflap.png');  // Exact name
+        this.load.image('foot-mid', 'assets/yellowbird-midflap.png');  // Exact name
+        this.load.image('foot-down', 'assets/yellowbird-downflap.png');  // Exact name
     }
 
     function create() {
-        console.log('Phaser create');  // Debug: Scene setup
         startTime = Date.now();
         this.add.image(144, 256, 'background');
         const ground = this.physics.add.staticGroup();
