@@ -1,9 +1,8 @@
-json{
+{
   "name": "flappy-foot",
   "version": "1.0.0",
   "description": "Play to Earn Solana Game",
   "main": "index.html",
-  "type": "module",
   "scripts": {
     "dev": "python -m http.server 3000",
     "build": "echo 'Static files ready'",
