@@ -78,17 +78,17 @@ function startGame() {
     const game = new Phaser.Game(config);
 
     let foot, pipes, score = 0, scoreText, gameOver = false, startTime;
-    const flapSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_wing.ogg');  // Absolute URL
-    const scoreSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_point.ogg');
-    const dieSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_die.ogg');
+    const flapSound = new Audio('assets/audio_wing.ogg');
+    const scoreSound = new Audio('assets/audio_point.ogg');
+    const dieSound = new Audio('assets/audio_die.ogg');
 
     function preload() {
-        this.load.image('background', 'https://kiraonsol.github.io/flappy-foot/assets/background-day.png');  // Absolute on repo
-        this.load.image('ground', 'https://kiraonsol.github.io/flappy-foot/assets/base.png');
-        this.load.image('pipe', 'https://kiraonsol.github.io/flappy-foot/assets/pipe-green.png');
-        this.load.image('foot-up', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-upflap.png');
-        this.load.image('foot-mid', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-midflap.png');
-        this.load.image('foot-down', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-downflap.png');
+        this.load.image('background', 'assets/background-day.png');  // Matches repo
+        this.load.image('ground', 'assets/base.png');  // Matches repo
+        this.load.image('pipe', 'assets/pipe-green.png');  // Matches repo
+        this.load.image('foot-up', 'assets/yellowbird-upflap.png');  // Matches repo
+        this.load.image('foot-mid', 'assets/yellowbird-midflap.png');  // Matches repo
+        this.load.image('foot-down', 'assets/yellowbird-downflap.png');  // Matches repo
     }
 
     function create() {
