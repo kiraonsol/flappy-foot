@@ -24,6 +24,26 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// Season helper functions
+function getCurrentSeason() {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const daysSinceStart = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));
+    const biWeeklyPeriod = Math.floor(daysSinceStart / 14);
+    return `${now.getFullYear()}-season-${biWeeklyPeriod}`;
+}
+
+function getSeasonEndDate() {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const daysSinceStart = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));
+    const biWeeklyPeriod = Math.floor(daysSinceStart / 14);
+    const seasonEndDay = (biWeeklyPeriod + 1) * 14;
+    const seasonEnd = new Date(startOfYear);
+    seasonEnd.setDate(seasonEndDay);
+    return seasonEnd.toISOString().slice(0, 10);
+}
+
 // Wallet functionality
 class SimpleWalletAdapter {
     constructor() {
@@ -54,15 +74,15 @@ class SimpleWalletAdapter {
         if (!this.connected) return;
         
         try {
-            const today = new Date().toISOString().slice(0, 10);
+            const currentSeason = getCurrentSeason();
             const walletKey = this.publicKey.toString();
             
-            // Check if player has already paid today (season pass)
-            const passRef = db.ref(`season-passes/${today}/${walletKey}`);
+            // Check if player has season pass for current bi-weekly period
+            const passRef = db.ref(`season-passes/${currentSeason}/${walletKey}`);
             const snapshot = await passRef.once('value');
             
             hasSeasonPass = snapshot.exists();
-            console.log('Season pass status:', hasSeasonPass);
+            console.log('Season pass status for', currentSeason, ':', hasSeasonPass);
             
             this.updateUI();
         } catch (error) {
@@ -73,14 +93,17 @@ class SimpleWalletAdapter {
     updateUI() {
         const payButton = document.getElementById('pay-entry');
         const walletStatus = document.getElementById('wallet-status');
+        const currentSeason = getCurrentSeason();
+        const seasonEnd = getSeasonEndDate();
         
         if (hasSeasonPass) {
-            payButton.textContent = 'Play Game (Paid)';
+            payButton.textContent = 'Play Game (Season Pass Active)';
             payButton.style.background = '#4CAF50';
-            walletStatus.innerHTML += '<br><span style="color: #4CAF50;">✓ Season Pass Active</span>';
+            walletStatus.innerHTML += `<br><span style="color: #4CAF50;">✓ Season Pass Active</span><br><small>Season ${currentSeason} ends ${seasonEnd}</small>`;
         } else {
             payButton.textContent = 'Pay 0.02 SOL for Season Pass';
             payButton.style.background = '#FF9800';
+            walletStatus.innerHTML += `<br><small>Season ${currentSeason} ends ${seasonEnd}</small>`;
         }
     }
 
@@ -165,17 +188,19 @@ document.addEventListener('DOMContentLoaded', function() {
             const signature = await wallet.sendTransaction(transaction);
             console.log('Payment successful:', signature);
 
-            // Record season pass
-            const today = new Date().toISOString().slice(0, 10);
+            // Record season pass for current bi-weekly period
+            const currentSeason = getCurrentSeason();
             const walletKey = wallet.publicKey.toString();
-            await db.ref(`season-passes/${today}/${walletKey}`).set({
+            await db.ref(`season-passes/${currentSeason}/${walletKey}`).set({
                 paid: true,
                 timestamp: Date.now(),
-                transaction: signature
+                transaction: signature,
+                season: currentSeason
             });
 
             hasSeasonPass = true;
-            alert('Season pass purchased! You can play unlimited games today!');
+            const seasonEnd = getSeasonEndDate();
+            alert(`Season pass purchased! You can play unlimited games until ${seasonEnd}!`);
             
             startGame();
 
@@ -459,26 +484,35 @@ async function submitScore(finalScore) {
         }
 
         const walletKey = wallet.publicKey.toString();
-        const today = new Date().toISOString().slice(0, 10);
+        const currentSeason = getCurrentSeason();
+        const seasonEnd = getSeasonEndDate();
         
-        // Check for existing score today
-        const existingRef = db.ref(`scores/${today}/${walletKey}/score`);
-        const existingSnapshot = await existingRef.once('value');
+        // Store score under current season, not daily
+        const scoreRef = db.ref(`seasonal-scores/${currentSeason}/${walletKey}`);
+        const existingSnapshot = await scoreRef.once('value');
         
-        // Only update if new score is higher
-        if (!existingSnapshot.exists() || finalScore > existingSnapshot.val()) {
-            await db.ref(`scores/${today}/${walletKey}`).set({
+        // Only update if new score is higher OR if no score exists
+        if (!existingSnapshot.exists() || finalScore > existingSnapshot.val().score) {
+            await scoreRef.set({
                 score: finalScore,
                 timestamp: Date.now(),
                 wallet: walletKey,
-                highScore: true
+                season: currentSeason,
+                seasonEnd: seasonEnd
             });
             
-            console.log('New high score submitted:', finalScore);
-            alert(`New high score: ${finalScore}!`);
+            console.log('New season high score submitted:', finalScore);
+            alert(`🏆 New season high score: ${finalScore}!\nSeason ends: ${seasonEnd}`);
         } else {
+            const currentHigh = existingSnapshot.val().score;
             console.log('Score submitted:', finalScore);
-            alert(`Score submitted: ${finalScore}`);
+            alert(`Score: ${finalScore}\nSeason high: ${currentHigh}\nSeason ends: ${seasonEnd}`);
+            
+            // Still store the attempt for analytics
+            await db.ref(`seasonal-scores/${currentSeason}/${walletKey}/attempts`).push({
+                score: finalScore,
+                timestamp: Date.now()
+            });
         }
         
     } catch (error) {
@@ -492,6 +526,8 @@ window.gameDebug = {
     wallet,
     connection,
     hasSeasonPass: () => hasSeasonPass,
+    getCurrentSeason,
+    getSeasonEndDate,
     resetSeasonPass: () => { hasSeasonPass = false; },
     restart: () => startGame()
 };
