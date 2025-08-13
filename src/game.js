@@ -1,4 +1,4 @@
-javascript// Game configuration and globals
+// Game configuration and globals
 let walletConnection = null;
 let playerWallet = null;
 let gameInstance = null;
