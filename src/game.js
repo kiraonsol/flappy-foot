@@ -2,6 +2,7 @@
 let walletConnection = null;
 let playerWallet = null;
 let gameInstance = null;
+let hasSeasonPass = false; // Track if player paid for this season
 
 // Solana connection
 const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
@@ -38,6 +39,7 @@ class SimpleWalletAdapter {
                 const response = await this._phantom.connect();
                 this.publicKey = response.publicKey;
                 this.connected = true;
+                await this.checkSeasonPass();
                 return response;
             } else {
                 throw new Error('Phantom wallet not found! Please install Phantom wallet.');
@@ -48,11 +50,46 @@ class SimpleWalletAdapter {
         }
     }
 
+    async checkSeasonPass() {
+        if (!this.connected) return;
+        
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const walletKey = this.publicKey.toString();
+            
+            // Check if player has already paid today (season pass)
+            const passRef = db.ref(`season-passes/${today}/${walletKey}`);
+            const snapshot = await passRef.once('value');
+            
+            hasSeasonPass = snapshot.exists();
+            console.log('Season pass status:', hasSeasonPass);
+            
+            this.updateUI();
+        } catch (error) {
+            console.error('Error checking season pass:', error);
+        }
+    }
+
+    updateUI() {
+        const payButton = document.getElementById('pay-entry');
+        const walletStatus = document.getElementById('wallet-status');
+        
+        if (hasSeasonPass) {
+            payButton.textContent = 'Play Game (Paid)';
+            payButton.style.background = '#4CAF50';
+            walletStatus.innerHTML += '<br><span style="color: #4CAF50;">✓ Season Pass Active</span>';
+        } else {
+            payButton.textContent = 'Pay 0.02 SOL for Season Pass';
+            payButton.style.background = '#FF9800';
+        }
+    }
+
     async disconnect() {
         if (this._phantom) {
             await this._phantom.disconnect();
             this.connected = false;
             this.publicKey = null;
+            hasSeasonPass = false;
         }
     }
 
@@ -107,6 +144,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // If already has season pass, just start game
+        if (hasSeasonPass) {
+            startGame();
+            return;
+        }
+
         try {
             payButton.textContent = 'Processing Payment...';
             payButton.disabled = true;
@@ -122,25 +165,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const signature = await wallet.sendTransaction(transaction);
             console.log('Payment successful:', signature);
 
-            alert('Entry paid successfully! Starting game...');
-            
-            // Hide wallet UI and show game
-            document.getElementById('wallet-ui').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
+            // Record season pass
+            const today = new Date().toISOString().slice(0, 10);
+            const walletKey = wallet.publicKey.toString();
+            await db.ref(`season-passes/${today}/${walletKey}`).set({
+                paid: true,
+                timestamp: Date.now(),
+                transaction: signature
+            });
+
+            hasSeasonPass = true;
+            alert('Season pass purchased! You can play unlimited games today!');
             
             startGame();
 
         } catch (error) {
             console.error('Payment failed:', error);
             alert('Payment failed: ' + error.message);
-            payButton.textContent = 'Pay 0.02 SOL to Play';
+            payButton.textContent = 'Pay 0.02 SOL for Season Pass';
             payButton.disabled = false;
         }
     });
 });
 
-// Phaser Game
 function startGame() {
+    // Hide wallet UI and show game
+    document.getElementById('wallet-ui').style.display = 'none';
+    document.getElementById('game-container').style.display = 'block';
+    
     const config = {
         type: Phaser.AUTO,
         width: 288,
@@ -150,7 +202,7 @@ function startGame() {
         physics: {
             default: 'arcade',
             arcade: {
-                gravity: { y: 400 },
+                gravity: { y: 300 }, // Reduced gravity for better feel
                 debug: false
             }
         },
@@ -161,11 +213,14 @@ function startGame() {
         }
     };
 
+    if (gameInstance) {
+        gameInstance.destroy(true);
+    }
     gameInstance = new Phaser.Game(config);
 }
 
 // Game variables
-let foot, pipes, score = 0, scoreText, gameOver = false, startTime;
+let foot, pipes, ground, groundTiles = [], score = 0, scoreText, gameOver = false, startTime;
 
 function preload() {
     // Load game assets with relative paths
@@ -185,15 +240,25 @@ function preload() {
 function create() {
     startTime = Date.now();
     
-    // Background and ground
+    // Background
     this.add.image(144, 256, 'background');
-    const ground = this.physics.add.staticGroup();
-    ground.create(144, 490, 'ground').setScale(2, 1).refreshBody();
+
+    // Create scrolling ground tiles
+    groundTiles = [];
+    for (let i = 0; i < 3; i++) {
+        const groundTile = this.add.image(i * 336, 490, 'ground');
+        groundTile.setOrigin(0, 0.5);
+        groundTiles.push(groundTile);
+    }
+
+    // Ground collision (invisible physics body)
+    const groundBody = this.physics.add.staticGroup();
+    groundBody.create(144, 490, null).setSize(288, 100).setVisible(false);
 
     // Create bird (foot)
     foot = this.physics.add.sprite(50, 256, 'foot-mid');
     foot.setScale(1.5);
-    foot.setCollideWorldBounds(true);
+    foot.body.setSize(20, 20); // Smaller hitbox for better gameplay
 
     // Bird animation
     this.anims.create({
@@ -212,7 +277,7 @@ function create() {
     pipes = this.physics.add.group();
 
     // Collisions
-    this.physics.add.collider(foot, ground, endGame, null, this);
+    this.physics.add.collider(foot, groundBody, endGame, null, this);
     this.physics.add.collider(foot, pipes, endGame, null, this);
 
     // Score display
@@ -224,29 +289,46 @@ function create() {
         strokeThickness: 4
     });
 
-    // Input handling
+    // Input handling - improved physics
     this.input.on('pointerdown', () => {
         if (gameOver) return;
-        foot.setVelocityY(-200);
-        foot.angle = -15;
-        this.sound.play('wing');
+        foot.setVelocityY(-230); // Better jump velocity
+        foot.angle = -20; // Less aggressive angle
+        try {
+            this.sound.play('wing');
+        } catch (e) {
+            console.log('Audio play failed');
+        }
     });
 
-    // Add pipes every 1.5 seconds
+    // Add pipes every 1.8 seconds (better spacing)
     this.time.addEvent({
-        delay: 1500,
+        delay: 1800,
         callback: addPipes,
         callbackScope: this,
         loop: true
     });
+
+    // Initial pipe spawn
+    this.time.delayedCall(1000, () => addPipes.call(this));
 }
 
 function update() {
     if (gameOver) return;
 
-    // Bird rotation
-    if (foot.angle < 90) {
-        foot.angle += 2;
+    // Scroll ground tiles
+    groundTiles.forEach(tile => {
+        tile.x -= 2;
+        if (tile.x <= -336) {
+            tile.x += 336 * 3;
+        }
+    });
+
+    // Improved bird rotation - more realistic
+    if (foot.body.velocity.y < -50) {
+        foot.angle = -20; // Upward angle when jumping
+    } else if (foot.body.velocity.y > 50) {
+        foot.angle = Math.min(foot.angle + 1.5, 20); // Gradual downward tilt
     }
 
     // Check pipe scoring and cleanup
@@ -260,31 +342,44 @@ function update() {
             if (pipe.type === 'bottom') {
                 score++;
                 scoreText.setText('Score: ' + score);
-                this.sound.play('point');
+                try {
+                    this.sound.play('point');
+                } catch (e) {
+                    console.log('Audio play failed');
+                }
             }
         }
     });
+
+    // Check if bird goes off screen
+    if (foot.y > 512 || foot.y < 0) {
+        endGame.call(this);
+    }
 }
 
 function addPipes() {
-    const gap = 150;
-    const minHeight = 100;
-    const maxHeight = 300;
-    const height = Math.floor(Math.random() * (maxHeight - minHeight)) + minHeight;
+    const gap = 120; // Consistent gap size
+    const minPipeHeight = 50;
+    const maxPipeHeight = 320;
     
-    // Top pipe
-    const topPipe = pipes.create(288, height - 160 - gap / 2, 'pipe');
+    // Random height for the gap center
+    const gapCenter = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight - gap)) + minPipeHeight + gap/2;
+    
+    // Top pipe (extends from top down)
+    const topPipe = pipes.create(288, gapCenter - gap/2, 'pipe');
+    topPipe.setOrigin(0.5, 1); // Anchor at bottom of pipe
     topPipe.setFlipY(true);
-    topPipe.setOrigin(0, 1);
+    topPipe.body.setSize(52, topPipe.height);
     
-    // Bottom pipe
-    const bottomPipe = pipes.create(288, height + gap / 2, 'pipe');
-    bottomPipe.setOrigin(0, 0);
+    // Bottom pipe (extends from bottom up)  
+    const bottomPipe = pipes.create(288, gapCenter + gap/2, 'pipe');
+    bottomPipe.setOrigin(0.5, 0); // Anchor at top of pipe
     bottomPipe.type = 'bottom';
+    bottomPipe.body.setSize(52, bottomPipe.height);
     
     // Set physics for both pipes
     [topPipe, bottomPipe].forEach(pipe => {
-        pipe.setVelocityX(-200);
+        pipe.setVelocityX(-160); // Consistent with original speed
         pipe.body.allowGravity = false;
         pipe.scored = false;
     });
@@ -294,14 +389,20 @@ function endGame() {
     if (gameOver) return;
     
     gameOver = true;
-    this.sound.play('die');
+    
+    try {
+        this.sound.play('die');
+    } catch (e) {
+        console.log('Audio play failed');
+    }
     
     // Anti-cheat: Check if score is reasonable
     const elapsed = (Date.now() - startTime) / 1000;
-    const maxPossibleScore = Math.floor(elapsed / 1.5) + 1; // One point per pipe spawn + buffer
+    const maxPossibleScore = Math.floor(elapsed / 1.8) + 2; // Based on pipe spawn rate
     
     if (score > maxPossibleScore) {
         alert('Invalid score detected! Score not submitted.');
+        showRestartUI();
         return;
     }
     
@@ -309,32 +410,44 @@ function endGame() {
     submitScore(score);
     
     // Game over display
-    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.5);
-    this.add.text(144, 200, 'Game Over', {
+    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
+    
+    const gameOverGroup = this.add.group();
+    
+    gameOverGroup.add(this.add.text(144, 180, 'Game Over', {
         fontSize: '36px',
         fill: '#fff',
-        fontFamily: 'Arial'
-    }).setOrigin(0.5);
+        fontFamily: 'Arial',
+        stroke: '#000',
+        strokeThickness: 3
+    }).setOrigin(0.5));
     
-    this.add.text(144, 250, `Final Score: ${score}`, {
+    gameOverGroup.add(this.add.text(144, 230, `Final Score: ${score}`, {
         fontSize: '24px',
         fill: '#fff',
-        fontFamily: 'Arial'
-    }).setOrigin(0.5);
+        fontFamily: 'Arial',
+        stroke: '#000',
+        strokeThickness: 2
+    }).setOrigin(0.5));
     
-    this.add.text(144, 300, 'Click to restart', {
+    gameOverGroup.add(this.add.text(144, 280, 'Click to Play Again', {
         fontSize: '18px',
-        fill: '#ccc',
+        fill: '#ffff99',
         fontFamily: 'Arial'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5));
 
-    // Restart on click
+    // Play again functionality
+    this.input.off('pointerdown'); // Remove existing listener
     this.input.on('pointerdown', () => {
-        if (gameInstance) {
-            gameInstance.destroy(true);
-        }
-        document.getElementById('wallet-ui').style.display = 'block';
-        document.getElementById('game-container').style.display = 'none';
+        startGame(); // Restart without payment if season pass active
+    });
+}
+
+function showRestartUI() {
+    // Show restart option without payment for season pass holders
+    this.input.off('pointerdown');
+    this.input.on('pointerdown', () => {
+        startGame();
     });
 }
 
@@ -348,14 +461,25 @@ async function submitScore(finalScore) {
         const walletKey = wallet.publicKey.toString();
         const today = new Date().toISOString().slice(0, 10);
         
-        await db.ref(`scores/${today}/${walletKey}`).set({
-            score: finalScore,
-            timestamp: Date.now(),
-            wallet: walletKey
-        });
+        // Check for existing score today
+        const existingRef = db.ref(`scores/${today}/${walletKey}/score`);
+        const existingSnapshot = await existingRef.once('value');
         
-        console.log('Score submitted successfully');
-        alert(`Score ${finalScore} submitted successfully!`);
+        // Only update if new score is higher
+        if (!existingSnapshot.exists() || finalScore > existingSnapshot.val()) {
+            await db.ref(`scores/${today}/${walletKey}`).set({
+                score: finalScore,
+                timestamp: Date.now(),
+                wallet: walletKey,
+                highScore: true
+            });
+            
+            console.log('New high score submitted:', finalScore);
+            alert(`New high score: ${finalScore}!`);
+        } else {
+            console.log('Score submitted:', finalScore);
+            alert(`Score submitted: ${finalScore}`);
+        }
         
     } catch (error) {
         console.error('Score submission failed:', error);
@@ -367,10 +491,7 @@ async function submitScore(finalScore) {
 window.gameDebug = {
     wallet,
     connection,
-    restart: () => {
-        if (gameInstance) {
-            gameInstance.destroy(true);
-        }
-        startGame();
-    }
+    hasSeasonPass: () => hasSeasonPass,
+    resetSeasonPass: () => { hasSeasonPass = false; },
+    restart: () => startGame()
 };
