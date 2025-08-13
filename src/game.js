@@ -1,6 +1,267 @@
-// REPLACE ONLY THESE FUNCTIONS IN YOUR EXISTING game.js
+// Game configuration and globals
+let walletConnection = null;
+let playerWallet = null;
+let gameInstance = null;
+let hasSeasonPass = false; // Track if player paid for this season
 
-// Replace the create() function with this:
+// Solana connection
+const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
+const TREASURY_PUBKEY = new solanaWeb3.PublicKey('9euu6jdRP2Uhi3qYihptK3aVLx8Gj1w6R3ALhLjr8XDN');
+
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyAR7h4noqcKozvPq5th6YHolF42Jc7O1CA",
+    authDomain: "flappy-foot.firebaseapp.com",
+    databaseURL: "https://flappy-foot-default-rtdb.firebaseio.com",
+    projectId: "flappy-foot",
+    storageBucket: "flappy-foot.firebasestorage.app",
+    messagingSenderId: "498047643029",
+    appId: "1:498047643029:web:7f59492defbc39e6659a9c",
+    measurementId: "G-XEHWMTRVXN"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Season helper functions
+function getCurrentSeason() {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const daysSinceStart = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));
+    const biWeeklyPeriod = Math.floor(daysSinceStart / 14);
+    return `${now.getFullYear()}-season-${biWeeklyPeriod}`;
+}
+
+function getSeasonEndDate() {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const daysSinceStart = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));
+    const biWeeklyPeriod = Math.floor(daysSinceStart / 14);
+    const seasonEndDay = (biWeeklyPeriod + 1) * 14;
+    const seasonEnd = new Date(startOfYear);
+    seasonEnd.setDate(seasonEndDay);
+    return seasonEnd.toISOString().slice(0, 10);
+}
+
+// Wallet functionality
+class SimpleWalletAdapter {
+    constructor() {
+        this.connected = false;
+        this.publicKey = null;
+        this._phantom = null;
+    }
+
+    async connect() {
+        try {
+            if (window.solana && window.solana.isPhantom) {
+                this._phantom = window.solana;
+                const response = await this._phantom.connect();
+                this.publicKey = response.publicKey;
+                this.connected = true;
+                await this.checkSeasonPass();
+                return response;
+            } else {
+                throw new Error('Phantom wallet not found! Please install Phantom wallet.');
+            }
+        } catch (error) {
+            console.error('Wallet connection failed:', error);
+            throw error;
+        }
+    }
+
+    async checkSeasonPass() {
+        if (!this.connected) return;
+        
+        try {
+            const currentSeason = getCurrentSeason();
+            const walletKey = this.publicKey.toString();
+            
+            // Check if player has season pass for current bi-weekly period
+            const passRef = db.ref(`season-passes/${currentSeason}/${walletKey}`);
+            const snapshot = await passRef.once('value');
+            
+            hasSeasonPass = snapshot.exists();
+            console.log('Season pass status for', currentSeason, ':', hasSeasonPass);
+            
+            this.updateUI();
+        } catch (error) {
+            console.error('Error checking season pass:', error);
+        }
+    }
+
+    updateUI() {
+        const payButton = document.getElementById('pay-entry');
+        const walletStatus = document.getElementById('wallet-status');
+        const currentSeason = getCurrentSeason();
+        const seasonEnd = getSeasonEndDate();
+        
+        if (hasSeasonPass) {
+            payButton.textContent = 'Play Game (Season Pass Active)';
+            payButton.style.background = '#4CAF50';
+            walletStatus.innerHTML += `<br><span style="color: #4CAF50;">✓ Season Pass Active</span><br><small>Season ${currentSeason} ends ${seasonEnd}</small>`;
+        } else {
+            payButton.textContent = 'Pay 0.02 SOL for Season Pass';
+            payButton.style.background = '#FF9800';
+            walletStatus.innerHTML += `<br><small>Season ${currentSeason} ends ${seasonEnd}</small>`;
+        }
+    }
+
+    async disconnect() {
+        if (this._phantom) {
+            await this._phantom.disconnect();
+            this.connected = false;
+            this.publicKey = null;
+            hasSeasonPass = false;
+        }
+    }
+
+    async sendTransaction(transaction) {
+        if (!this.connected || !this._phantom) {
+            throw new Error('Wallet not connected');
+        }
+
+        transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        transaction.feePayer = this.publicKey;
+
+        const signed = await this._phantom.signTransaction(transaction);
+        const signature = await connection.sendRawTransaction(signed.serialize());
+        await connection.confirmTransaction(signature);
+        return signature;
+    }
+}
+
+// Initialize wallet
+const wallet = new SimpleWalletAdapter();
+
+// DOM elements and event handlers
+document.addEventListener('DOMContentLoaded', function() {
+    const connectButton = document.getElementById('connect-wallet');
+    const payButton = document.getElementById('pay-entry');
+    const walletStatus = document.getElementById('wallet-status');
+
+    // Connect wallet handler
+    connectButton.addEventListener('click', async function() {
+        try {
+            connectButton.textContent = 'Connecting...';
+            connectButton.disabled = true;
+
+            await wallet.connect();
+            
+            walletStatus.textContent = `Connected: ${wallet.publicKey.toString().slice(0, 4)}...${wallet.publicKey.toString().slice(-4)}`;
+            connectButton.textContent = 'Wallet Connected ✓';
+            connectButton.style.background = '#2196F3';
+            payButton.disabled = false;
+
+        } catch (error) {
+            alert(error.message);
+            connectButton.textContent = 'Connect Solana Wallet';
+            connectButton.disabled = false;
+        }
+    });
+
+    // Pay entry handler
+    payButton.addEventListener('click', async function() {
+        if (!wallet.connected) {
+            alert('Please connect your wallet first!');
+            return;
+        }
+
+        // If already has season pass, just start game
+        if (hasSeasonPass) {
+            startGame();
+            return;
+        }
+
+        try {
+            payButton.textContent = 'Processing Payment...';
+            payButton.disabled = true;
+
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: wallet.publicKey,
+                    toPubkey: TREASURY_PUBKEY,
+                    lamports: 0.02 * solanaWeb3.LAMPORTS_PER_SOL,
+                })
+            );
+
+            const signature = await wallet.sendTransaction(transaction);
+            console.log('Payment successful:', signature);
+
+            // Record season pass for current bi-weekly period
+            const currentSeason = getCurrentSeason();
+            const walletKey = wallet.publicKey.toString();
+            await db.ref(`season-passes/${currentSeason}/${walletKey}`).set({
+                paid: true,
+                timestamp: Date.now(),
+                transaction: signature,
+                season: currentSeason
+            });
+
+            hasSeasonPass = true;
+            const seasonEnd = getSeasonEndDate();
+            alert(`Season pass purchased! You can play unlimited games until ${seasonEnd}!`);
+            
+            startGame();
+
+        } catch (error) {
+            console.error('Payment failed:', error);
+            alert('Payment failed: ' + error.message);
+            payButton.textContent = 'Pay 0.02 SOL for Season Pass';
+            payButton.disabled = false;
+        }
+    });
+});
+
+function startGame() {
+    // Hide wallet UI and show game
+    document.getElementById('wallet-ui').style.display = 'none';
+    document.getElementById('game-container').style.display = 'block';
+    
+    const config = {
+        type: Phaser.AUTO,
+        width: 288,
+        height: 512,
+        parent: 'game-container',
+        backgroundColor: '#70c5ce',
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 980 }, // Original Flappy Bird gravity!
+                debug: false
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        }
+    };
+
+    if (gameInstance) {
+        gameInstance.destroy(true);
+    }
+    gameInstance = new Phaser.Game(config);
+}
+
+// Game variables
+let foot, pipes, ground, groundTiles = [], score = 0, scoreText, gameOver = false, startTime;
+
+function preload() {
+    // Load game assets with relative paths
+    this.load.image('background', './assets/background-day.png');
+    this.load.image('ground', './assets/base.png');
+    this.load.image('pipe', './assets/pipe-green.png');
+    this.load.image('foot-up', './assets/yellowbird-upflap.png');
+    this.load.image('foot-mid', './assets/yellowbird-midflap.png');
+    this.load.image('foot-down', './assets/yellowbird-downflap.png');
+
+    // Load audio
+    this.load.audio('wing', './assets/audio_wing.ogg');
+    this.load.audio('point', './assets/audio_point.ogg');
+    this.load.audio('die', './assets/audio_die.ogg');
+}
+
 function create() {
     startTime = Date.now();
     
@@ -80,7 +341,6 @@ function create() {
     this.time.delayedCall(1200, () => addPipes.call(this));
 }
 
-// Replace the update() function with this:
 function update() {
     if (gameOver) return;
 
@@ -127,7 +387,6 @@ function update() {
     }
 }
 
-// Replace the addPipes() function with this:
 function addPipes() {
     const gap = 100; // Original gap size
     const pipeWidth = 52;
@@ -162,24 +421,124 @@ function addPipes() {
     });
 }
 
-// ALSO UPDATE your Phaser config to have original physics:
-// In your startGame() function, replace the config with this:
-const config = {
-    type: Phaser.AUTO,
-    width: 288,
-    height: 512,
-    parent: 'game-container',
-    backgroundColor: '#70c5ce',
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 980 }, // Original Flappy Bird gravity!
-            debug: false
-        }
-    },
-    scene: {
-        preload: preload,
-        create: create,
-        update: update
+function endGame() {
+    if (gameOver) return;
+    
+    gameOver = true;
+    
+    try {
+        this.sound.play('die');
+    } catch (e) {
+        console.log('Audio play failed');
     }
+    
+    // Anti-cheat: Check if score is reasonable
+    const elapsed = (Date.now() - startTime) / 1000;
+    const maxPossibleScore = Math.floor(elapsed / 1.5) + 2; // Based on pipe spawn rate
+    
+    if (score > maxPossibleScore) {
+        alert('Invalid score detected! Score not submitted.');
+        showRestartUI();
+        return;
+    }
+    
+    // Submit score
+    submitScore(score);
+    
+    // Game over display
+    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
+    
+    const gameOverGroup = this.add.group();
+    
+    gameOverGroup.add(this.add.text(144, 180, 'Game Over', {
+        fontSize: '36px',
+        fill: '#fff',
+        fontFamily: 'Arial',
+        stroke: '#000',
+        strokeThickness: 3
+    }).setOrigin(0.5));
+    
+    gameOverGroup.add(this.add.text(144, 230, `Final Score: ${score}`, {
+        fontSize: '24px',
+        fill: '#fff',
+        fontFamily: 'Arial',
+        stroke: '#000',
+        strokeThickness: 2
+    }).setOrigin(0.5));
+    
+    gameOverGroup.add(this.add.text(144, 280, 'Click to Play Again', {
+        fontSize: '18px',
+        fill: '#ffff99',
+        fontFamily: 'Arial'
+    }).setOrigin(0.5));
+
+    // Play again functionality
+    this.input.off('pointerdown'); // Remove existing listener
+    this.input.on('pointerdown', () => {
+        startGame(); // Restart without payment if season pass active
+    });
+}
+
+function showRestartUI() {
+    // Show restart option without payment for season pass holders
+    this.input.off('pointerdown');
+    this.input.on('pointerdown', () => {
+        startGame();
+    });
+}
+
+async function submitScore(finalScore) {
+    try {
+        if (!wallet.connected || !wallet.publicKey) {
+            alert('Wallet not connected - score not submitted');
+            return;
+        }
+
+        const walletKey = wallet.publicKey.toString();
+        const currentSeason = getCurrentSeason();
+        const seasonEnd = getSeasonEndDate();
+        
+        // Store score under current season, not daily
+        const scoreRef = db.ref(`seasonal-scores/${currentSeason}/${walletKey}`);
+        const existingSnapshot = await scoreRef.once('value');
+        
+        // Only update if new score is higher OR if no score exists
+        if (!existingSnapshot.exists() || finalScore > existingSnapshot.val().score) {
+            await scoreRef.set({
+                score: finalScore,
+                timestamp: Date.now(),
+                wallet: walletKey,
+                season: currentSeason,
+                seasonEnd: seasonEnd
+            });
+            
+            console.log('New season high score submitted:', finalScore);
+            alert(`🏆 New season high score: ${finalScore}!\nSeason ends: ${seasonEnd}`);
+        } else {
+            const currentHigh = existingSnapshot.val().score;
+            console.log('Score submitted:', finalScore);
+            alert(`Score: ${finalScore}\nSeason high: ${currentHigh}\nSeason ends: ${seasonEnd}`);
+            
+            // Still store the attempt for analytics
+            await db.ref(`seasonal-scores/${currentSeason}/${walletKey}/attempts`).push({
+                score: finalScore,
+                timestamp: Date.now()
+            });
+        }
+        
+    } catch (error) {
+        console.error('Score submission failed:', error);
+        alert('Score submission failed: ' + error.message);
+    }
+}
+
+// Export for debugging
+window.gameDebug = {
+    wallet,
+    connection,
+    hasSeasonPass: () => hasSeasonPass,
+    getCurrentSeason,
+    getSeasonEndDate,
+    resetSeasonPass: () => { hasSeasonPass = false; },
+    restart: () => startGame()
 };
