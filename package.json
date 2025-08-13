@@ -1,20 +1,19 @@
-{
+json{
   "name": "flappy-foot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Play to Earn Solana Game",
+  "main": "index.html",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "python -m http.server 3000",
+    "build": "echo 'Static files ready'",
+    "preview": "python -m http.server 8080"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["solana", "game", "web3", "play-to-earn"],
+  "author": "kiraonsol",
+  "license": "MIT",
   "dependencies": {
-    "@solana/wallet-adapter-base": "^0.9.27",
-    "@solana/wallet-adapter-react": "^0.15.39",
-    "@solana/wallet-adapter-react-ui": "^0.9.39",
-    "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
-    "firebase": "^12.1.0"
+    "firebase": "^9.23.0"
   }
 }
