@@ -240,12 +240,15 @@ function startGame() {
 
     if (gameInstance) {
         gameInstance.destroy(true);
+        gameInstance = null;
     }
     gameInstance = new Phaser.Game(config);
 }
 
 // Game variables
 let foot, pipes, ground, groundTiles = [], score = 0, scoreText, gameOver = false, startTime;
+let pipeTimer = null; // Track pipe spawn timer
+let lastPipeX = 400; // Track last pipe position for consistent spacing
 
 function preload() {
     // Load game assets with relative paths
@@ -264,6 +267,15 @@ function preload() {
 
 function create() {
     startTime = Date.now();
+    gameOver = false;
+    score = 0;
+    lastPipeX = 400; // Reset pipe position tracking
+    
+    // Clear any existing timers
+    if (pipeTimer) {
+        pipeTimer.destroy();
+        pipeTimer = null;
+    }
     
     // Background
     this.add.image(144, 256, 'background');
@@ -329,16 +341,16 @@ function create() {
         }
     });
 
-    // Add pipes every 1.5 seconds (original timing)
-    this.time.addEvent({
-        delay: 1500,
+    // FIXED: Add pipes with consistent spacing every 1.8 seconds
+    pipeTimer = this.time.addEvent({
+        delay: 1800, // Consistent 1.8 second intervals
         callback: addPipes,
         callbackScope: this,
         loop: true
     });
 
-    // Spawn first pipes immediately
-    this.time.delayedCall(1200, () => addPipes.call(this));
+    // Spawn first pipes after a delay
+    this.time.delayedCall(1500, () => addPipes.call(this));
 }
 
 function update() {
@@ -388,8 +400,14 @@ function update() {
 }
 
 function addPipes() {
+    // FIXED: Consistent horizontal spacing between pipe pairs
     const gap = 100; // Original gap size
     const pipeWidth = 52;
+    const PIPE_SPACING = 200; // Fixed horizontal distance between pipe pairs
+    
+    // Position pipes with consistent spacing
+    const pipeX = lastPipeX + PIPE_SPACING;
+    lastPipeX = pipeX;
     
     // Random height for gap - ensures pipes always spawn from top and bottom
     const minGapTop = 80;  // Minimum space from top
@@ -398,14 +416,14 @@ function addPipes() {
     const gapBottom = gapTop + gap;
     
     // TOP PIPE - Always extends from very top down
-    const topPipe = pipes.create(288, 0, 'pipe');
+    const topPipe = pipes.create(pipeX, 0, 'pipe');
     topPipe.setOrigin(0.5, 0); // Anchor at top
     topPipe.setScale(1, gapTop / 320); // Scale to reach gap
     topPipe.body.setSize(pipeWidth, gapTop);
     topPipe.setFlipY(true); // Flip to show opening downward
     
     // BOTTOM PIPE - Always extends from bottom up  
-    const bottomPipe = pipes.create(288, 512, 'pipe');
+    const bottomPipe = pipes.create(pipeX, 512, 'pipe');
     bottomPipe.setOrigin(0.5, 1); // Anchor at bottom
     const bottomHeight = 512 - gapBottom;
     bottomPipe.setScale(1, bottomHeight / 320); // Scale to reach gap
@@ -426,6 +444,12 @@ function endGame() {
     
     gameOver = true;
     
+    // Stop pipe spawning
+    if (pipeTimer) {
+        pipeTimer.destroy();
+        pipeTimer = null;
+    }
+    
     try {
         this.sound.play('die');
     } catch (e) {
@@ -434,63 +458,118 @@ function endGame() {
     
     // Anti-cheat: Check if score is reasonable
     const elapsed = (Date.now() - startTime) / 1000;
-    const maxPossibleScore = Math.floor(elapsed / 1.5) + 2; // Based on pipe spawn rate
+    const maxPossibleScore = Math.floor(elapsed / 1.8) + 2; // Based on pipe spawn rate
     
     if (score > maxPossibleScore) {
         alert('Invalid score detected! Score not submitted.');
-        showRestartUI();
+        showGameOverScreen.call(this);
         return;
     }
     
     // Submit score
     submitScore(score);
     
-    // Game over display
-    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
-    
-    const gameOverGroup = this.add.group();
-    
-    gameOverGroup.add(this.add.text(144, 180, 'Game Over', {
-        fontSize: '36px',
-        fill: '#fff',
-        fontFamily: 'Arial',
-        stroke: '#000',
-        strokeThickness: 3
-    }).setOrigin(0.5));
-    
-    gameOverGroup.add(this.add.text(144, 230, `Final Score: ${score}`, {
-        fontSize: '24px',
-        fill: '#fff',
-        fontFamily: 'Arial',
-        stroke: '#000',
-        strokeThickness: 2
-    }).setOrigin(0.5));
-    
-    gameOverGroup.add(this.add.text(144, 280, 'Click to Play Again', {
-        fontSize: '18px',
-        fill: '#ffff99',
-        fontFamily: 'Arial'
-    }).setOrigin(0.5));
-
-    // Play again functionality
-    this.input.off('pointerdown'); // Remove existing listener
-    this.input.on('pointerdown', () => {
-        startGame(); // Restart without payment if season pass active
-    });
+    // Show proper game over screen
+    showGameOverScreen.call(this);
 }
 
-function showRestartUI() {
-    // Show restart option without payment for season pass holders
-    this.input.off('pointerdown');
-    this.input.on('pointerdown', () => {
-        startGame();
+function showGameOverScreen() {
+    // Dark overlay
+    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
+    
+    // Game Over panel background
+    const panel = this.add.rectangle(144, 220, 200, 150, 0xDEDEDE);
+    panel.setStroke(0x000000, 2);
+    panel.setDepth(100);
+    
+    // Game Over text
+    this.add.text(144, 160, 'Game Over', {
+        fontSize: '24px',
+        fill: '#000',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(101);
+    
+    // Score display
+    this.add.text(144, 190, `Score: ${score}`, {
+        fontSize: '18px',
+        fill: '#000',
+        fontFamily: 'Arial'
+    }).setOrigin(0.5).setDepth(101);
+    
+    // Restart button
+    const restartBtn = this.add.rectangle(144, 230, 120, 30, 0xFFA500);
+    restartBtn.setStroke(0x000000, 2);
+    restartBtn.setInteractive();
+    restartBtn.setDepth(101);
+    
+    this.add.text(144, 230, 'RESTART', {
+        fontSize: '14px',
+        fill: '#000',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(102);
+    
+    // Share button
+    const shareBtn = this.add.rectangle(144, 270, 120, 30, 0x4CAF50);
+    shareBtn.setStroke(0x000000, 2);
+    shareBtn.setInteractive();
+    shareBtn.setDepth(101);
+    
+    this.add.text(144, 270, 'SHARE', {
+        fontSize: '14px',
+        fill: '#fff',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(102);
+    
+    // Main menu button
+    const menuBtn = this.add.rectangle(144, 310, 120, 30, 0x2196F3);
+    menuBtn.setStroke(0x000000, 2);
+    menuBtn.setInteractive();
+    menuBtn.setDepth(101);
+    
+    this.add.text(144, 310, 'MAIN MENU', {
+        fontSize: '14px',
+        fill: '#fff',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(102);
+    
+    // Button interactions
+    restartBtn.on('pointerdown', () => {
+        this.scene.restart(); // Properly restart the scene
+    });
+    
+    shareBtn.on('pointerdown', () => {
+        const shareText = `I scored ${score} points in Flappy Foot! Can you beat my score? Play at ${window.location.href}`;
+        if (navigator.share) {
+            navigator.share({
+                title: 'Flappy Foot Score',
+                text: shareText,
+                url: window.location.href
+            });
+        } else {
+            navigator.clipboard.writeText(shareText);
+            alert('Score copied to clipboard!');
+        }
+    });
+    
+    menuBtn.on('pointerdown', () => {
+        // Return to main menu
+        if (gameInstance) {
+            gameInstance.destroy(true);
+            gameInstance = null;
+        }
+        document.getElementById('wallet-ui').style.display = 'block';
+        document.getElementById('game-container').style.display = 'none';
     });
 }
 
 async function submitScore(finalScore) {
     try {
         if (!wallet.connected || !wallet.publicKey) {
-            alert('Wallet not connected - score not submitted');
+            console.log('Wallet not connected - score not submitted');
             return;
         }
 
@@ -513,11 +592,8 @@ async function submitScore(finalScore) {
             });
             
             console.log('New season high score submitted:', finalScore);
-            alert(`🏆 New season high score: ${finalScore}!\nSeason ends: ${seasonEnd}`);
         } else {
-            const currentHigh = existingSnapshot.val().score;
             console.log('Score submitted:', finalScore);
-            alert(`Score: ${finalScore}\nSeason high: ${currentHigh}\nSeason ends: ${seasonEnd}`);
             
             // Still store the attempt for analytics
             await db.ref(`seasonal-scores/${currentSeason}/${walletKey}/attempts`).push({
@@ -528,7 +604,6 @@ async function submitScore(finalScore) {
         
     } catch (error) {
         console.error('Score submission failed:', error);
-        alert('Score submission failed: ' + error.message);
     }
 }
 
