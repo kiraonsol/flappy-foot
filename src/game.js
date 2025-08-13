@@ -444,11 +444,25 @@ function endGame() {
     
     gameOver = true;
     
+    // Stop all physics immediately
+    foot.setVelocityY(0);
+    foot.setVelocityX(0);
+    foot.body.setEnable(false); // Disable physics on bird
+    
+    // Stop all pipes
+    pipes.getChildren().forEach(pipe => {
+        pipe.setVelocityX(0);
+        pipe.body.setEnable(false);
+    });
+    
     // Stop pipe spawning
     if (pipeTimer) {
         pipeTimer.destroy();
         pipeTimer = null;
     }
+    
+    // Clear all input listeners
+    this.input.removeAllListeners();
     
     try {
         this.sound.play('die');
@@ -456,106 +470,119 @@ function endGame() {
         console.log('Audio play failed');
     }
     
-    // Anti-cheat: Check if score is reasonable
-    const elapsed = (Date.now() - startTime) / 1000;
-    const maxPossibleScore = Math.floor(elapsed / 1.8) + 2; // Based on pipe spawn rate
-    
-    if (score > maxPossibleScore) {
-        alert('Invalid score detected! Score not submitted.');
-        showGameOverScreen.call(this);
-        return;
-    }
-    
-    // Submit score
+    // Submit score (async but don't wait)
     submitScore(score);
     
-    // Show proper game over screen
-    showGameOverScreen.call(this);
+    // Show game over screen immediately
+    this.time.delayedCall(500, () => {
+        showGameOverScreen.call(this);
+    });
 }
 
 function showGameOverScreen() {
+    console.log('Showing game over screen'); // Debug log
+    
     // Dark overlay
-    this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
+    const overlay = this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
+    overlay.setDepth(100);
     
     // Game Over panel background
     const panel = this.add.rectangle(144, 220, 200, 150, 0xDEDEDE);
     panel.setStroke(0x000000, 2);
-    panel.setDepth(100);
+    panel.setDepth(101);
     
     // Game Over text
-    this.add.text(144, 160, 'Game Over', {
+    const gameOverText = this.add.text(144, 160, 'Game Over', {
         fontSize: '24px',
         fill: '#000',
         fontFamily: 'Arial',
         fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(101);
+    });
+    gameOverText.setOrigin(0.5);
+    gameOverText.setDepth(102);
     
     // Score display
-    this.add.text(144, 190, `Score: ${score}`, {
+    const scoreDisplay = this.add.text(144, 190, `Score: ${score}`, {
         fontSize: '18px',
         fill: '#000',
         fontFamily: 'Arial'
-    }).setOrigin(0.5).setDepth(101);
+    });
+    scoreDisplay.setOrigin(0.5);
+    scoreDisplay.setDepth(102);
     
     // Restart button
     const restartBtn = this.add.rectangle(144, 230, 120, 30, 0xFFA500);
     restartBtn.setStroke(0x000000, 2);
-    restartBtn.setInteractive();
+    restartBtn.setInteractive({ useHandCursor: true });
     restartBtn.setDepth(101);
     
-    this.add.text(144, 230, 'RESTART', {
+    const restartText = this.add.text(144, 230, 'RESTART', {
         fontSize: '14px',
         fill: '#000',
         fontFamily: 'Arial',
         fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(102);
+    });
+    restartText.setOrigin(0.5);
+    restartText.setDepth(102);
     
     // Share button
     const shareBtn = this.add.rectangle(144, 270, 120, 30, 0x4CAF50);
     shareBtn.setStroke(0x000000, 2);
-    shareBtn.setInteractive();
+    shareBtn.setInteractive({ useHandCursor: true });
     shareBtn.setDepth(101);
     
-    this.add.text(144, 270, 'SHARE', {
+    const shareText = this.add.text(144, 270, 'SHARE', {
         fontSize: '14px',
         fill: '#fff',
         fontFamily: 'Arial',
         fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(102);
+    });
+    shareText.setOrigin(0.5);
+    shareText.setDepth(102);
     
     // Main menu button
     const menuBtn = this.add.rectangle(144, 310, 120, 30, 0x2196F3);
     menuBtn.setStroke(0x000000, 2);
-    menuBtn.setInteractive();
+    menuBtn.setInteractive({ useHandCursor: true });
     menuBtn.setDepth(101);
     
-    this.add.text(144, 310, 'MAIN MENU', {
+    const menuText = this.add.text(144, 310, 'MAIN MENU', {
         fontSize: '14px',
         fill: '#fff',
         fontFamily: 'Arial',
         fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(102);
+    });
+    menuText.setOrigin(0.5);
+    menuText.setDepth(102);
     
     // Button interactions
     restartBtn.on('pointerdown', () => {
+        console.log('Restart button clicked'); // Debug log
         this.scene.restart(); // Properly restart the scene
     });
     
+    // Also add pointerup for better UX
+    restartBtn.on('pointerup', () => {
+        this.scene.restart();
+    });
+    
     shareBtn.on('pointerdown', () => {
-        const shareText = `I scored ${score} points in Flappy Foot! Can you beat my score? Play at ${window.location.href}`;
+        console.log('Share button clicked'); // Debug log
+        const shareTextContent = `I scored ${score} points in Flappy Foot! Can you beat my score? Play at ${window.location.href}`;
         if (navigator.share) {
             navigator.share({
                 title: 'Flappy Foot Score',
-                text: shareText,
+                text: shareTextContent,
                 url: window.location.href
             });
         } else {
-            navigator.clipboard.writeText(shareText);
+            navigator.clipboard.writeText(shareTextContent);
             alert('Score copied to clipboard!');
         }
     });
     
     menuBtn.on('pointerdown', () => {
+        console.log('Menu button clicked'); // Debug log
         // Return to main menu
         if (gameInstance) {
             gameInstance.destroy(true);
@@ -563,6 +590,14 @@ function showGameOverScreen() {
         }
         document.getElementById('wallet-ui').style.display = 'block';
         document.getElementById('game-container').style.display = 'none';
+    });
+    
+    // Also allow clicking anywhere to restart (like original)
+    this.input.on('pointerdown', (pointer, currentlyOver) => {
+        if (currentlyOver.length === 0) {
+            // Clicked on empty space, restart
+            this.scene.restart();
+        }
     });
 }
 
