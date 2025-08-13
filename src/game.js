@@ -5,9 +5,9 @@ import { WalletModalProvider, WalletMultiButton } from '@solana/wallet-adapter-r
 
 const wallets = [new PhantomWalletAdapter()];
 const connection = new Connection('https://api.devnet.solana.com');
-const TREASURY_PUBKEY = new PublicKey('9euu6jdRP2Uhi3qYihptK3aVLx8Gj1w6R3ALhLjr8XDN');  // Your Treasury PDA
+const TREASURY_PUBKEY = new PublicKey('9euu6jdRP2Uhi3qYihptK3aVLx8Gj1w6R3ALhLjr8XDN');
 
-// Your Firebase config
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAR7h4noqcKozvPq5th6YHolF42Jc7O1CA",
   authDomain: "flappy-foot.firebaseapp.com",
@@ -78,17 +78,17 @@ function startGame() {
     const game = new Phaser.Game(config);
 
     let foot, pipes, score = 0, scoreText, gameOver = false, startTime;
-    const flapSound = new Audio('assets/audio_wing.ogg');  // Updated to .ogg from your repo
-    const scoreSound = new Audio('assets/audio_point.ogg');  // Updated to .ogg
-    const dieSound = new Audio('assets/audio_die.ogg');  // Updated to .ogg
+    const flapSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_wing.ogg');  // Absolute URL
+    const scoreSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_point.ogg');
+    const dieSound = new Audio('https://kiraonsol.github.io/flappy-foot/assets/audio_die.ogg');
 
     function preload() {
-        this.load.image('background', 'assets/background-day.png');  // Exact name from repo
-        this.load.image('ground', 'assets/base.png');  // Exact name
-        this.load.image('pipe', 'assets/pipe-green.png');  // Exact name
-        this.load.image('foot-up', 'assets/yellowbird-upflap.png');  // Exact name
-        this.load.image('foot-mid', 'assets/yellowbird-midflap.png');  // Exact name
-        this.load.image('foot-down', 'assets/yellowbird-downflap.png');  // Exact name
+        this.load.image('background', 'https://kiraonsol.github.io/flappy-foot/assets/background-day.png');  // Absolute on repo
+        this.load.image('ground', 'https://kiraonsol.github.io/flappy-foot/assets/base.png');
+        this.load.image('pipe', 'https://kiraonsol.github.io/flappy-foot/assets/pipe-green.png');
+        this.load.image('foot-up', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-upflap.png');
+        this.load.image('foot-mid', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-midflap.png');
+        this.load.image('foot-down', 'https://kiraonsol.github.io/flappy-foot/assets/yellowbird-downflap.png');
     }
 
     function create() {
