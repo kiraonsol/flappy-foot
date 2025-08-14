@@ -249,6 +249,7 @@ function startGame() {
 let foot, pipes, ground, groundTiles = [], score = 0, scoreText, gameOver = false, startTime;
 let pipeTimer = null; // Track pipe spawn timer
 let lastPipeX = 400; // Track last pipe position for consistent spacing
+let gameScene = null; // Store scene reference
 
 function preload() {
     // Load game assets with relative paths
@@ -266,6 +267,9 @@ function preload() {
 }
 
 function create() {
+    console.log('🎮 Game scene created'); // Debug log
+    
+    gameScene = this; // Store scene reference
     startTime = Date.now();
     gameOver = false;
     score = 0;
@@ -315,9 +319,16 @@ function create() {
     const groundBody = this.physics.add.staticGroup();
     groundBody.create(144, 450, null).setSize(288, 50).setVisible(false);
 
-    // Collisions
-    this.physics.add.collider(foot, groundBody, endGame, null, this);
-    this.physics.add.collider(foot, pipes, endGame, null, this);
+    // Collisions with better debugging
+    this.physics.add.collider(foot, groundBody, () => {
+        console.log('🔥 Bird hit ground!'); // Debug log
+        endGame();
+    }, null, this);
+    
+    this.physics.add.collider(foot, pipes, () => {
+        console.log('🔥 Bird hit pipe!'); // Debug log
+        endGame();
+    }, null, this);
 
     // Score display
     scoreText = this.add.text(16, 16, 'Score: 0', {
@@ -395,7 +406,8 @@ function update() {
 
     // Check if bird goes off screen
     if (foot.y > 450 || foot.y < -50) {
-        endGame.call(this);
+        console.log('🔥 Bird went off screen!'); // Debug log
+        endGame();
     }
 }
 
@@ -440,20 +452,33 @@ function addPipes() {
 }
 
 function endGame() {
-    if (gameOver) return;
+    console.log('💀 GAME OVER! Starting end game sequence...'); // Debug log
+    
+    if (gameOver) {
+        console.log('⚠️ Game already over, skipping...'); 
+        return;
+    }
     
     gameOver = true;
     
     // Stop all physics immediately
-    foot.setVelocityY(0);
-    foot.setVelocityX(0);
-    foot.body.setEnable(false); // Disable physics on bird
+    if (foot) {
+        foot.setVelocityY(0);
+        foot.setVelocityX(0);
+        if (foot.body) {
+            foot.body.setEnable(false); // Disable physics on bird
+        }
+    }
     
     // Stop all pipes
-    pipes.getChildren().forEach(pipe => {
-        pipe.setVelocityX(0);
-        pipe.body.setEnable(false);
-    });
+    if (pipes) {
+        pipes.getChildren().forEach(pipe => {
+            pipe.setVelocityX(0);
+            if (pipe.body) {
+                pipe.body.setEnable(false);
+            }
+        });
+    }
     
     // Stop pipe spawning
     if (pipeTimer) {
@@ -462,10 +487,14 @@ function endGame() {
     }
     
     // Clear all input listeners
-    this.input.removeAllListeners();
+    if (gameScene && gameScene.input) {
+        gameScene.input.removeAllListeners();
+    }
     
     try {
-        this.sound.play('die');
+        if (gameScene && gameScene.sound) {
+            gameScene.sound.play('die');
+        }
     } catch (e) {
         console.log('Audio play failed');
     }
@@ -473,102 +502,105 @@ function endGame() {
     // Submit score (async but don't wait)
     submitScore(score);
     
-    // Show game over screen immediately
-    this.time.delayedCall(500, () => {
-        showGameOverScreen.call(this);
-    });
+    console.log('⏳ Showing game over screen in 1 second...'); // Debug log
+    
+    // Show game over screen immediately with no delay
+    showGameOverScreen();
 }
 
 function showGameOverScreen() {
-    console.log('Showing game over screen'); // Debug log
+    console.log('🎯 Creating game over screen with score:', score); // Debug log
+    
+    if (!gameScene) {
+        console.error('❌ No game scene available!');
+        return;
+    }
     
     // Dark overlay
-    const overlay = this.add.rectangle(144, 256, 288, 512, 0x000000, 0.7);
-    overlay.setDepth(100);
+    const overlay = gameScene.add.rectangle(144, 256, 288, 512, 0x000000, 0.8);
+    overlay.setDepth(200);
     
-    // Game Over panel background
-    const panel = this.add.rectangle(144, 220, 200, 150, 0xDEDEDE);
-    panel.setStroke(0x000000, 2);
-    panel.setDepth(101);
+    // Game Over panel background (bigger and more visible)
+    const panel = gameScene.add.rectangle(144, 256, 240, 200, 0xFFFFFF);
+    panel.setStroke(0x000000, 3);
+    panel.setDepth(201);
     
     // Game Over text
-    const gameOverText = this.add.text(144, 160, 'Game Over', {
-        fontSize: '24px',
-        fill: '#000',
+    const gameOverText = gameScene.add.text(144, 180, 'GAME OVER', {
+        fontSize: '28px',
+        fill: '#FF0000',
         fontFamily: 'Arial',
         fontStyle: 'bold'
     });
     gameOverText.setOrigin(0.5);
-    gameOverText.setDepth(102);
+    gameOverText.setDepth(202);
     
     // Score display
-    const scoreDisplay = this.add.text(144, 190, `Score: ${score}`, {
-        fontSize: '18px',
-        fill: '#000',
-        fontFamily: 'Arial'
+    const scoreDisplay = gameScene.add.text(144, 220, `Score: ${score}`, {
+        fontSize: '22px',
+        fill: '#000000',
+        fontFamily: 'Arial',
+        fontStyle: 'bold'
     });
     scoreDisplay.setOrigin(0.5);
-    scoreDisplay.setDepth(102);
+    scoreDisplay.setDepth(202);
     
     // Restart button
-    const restartBtn = this.add.rectangle(144, 230, 120, 30, 0xFFA500);
+    const restartBtn = gameScene.add.rectangle(144, 270, 140, 35, 0x4CAF50);
     restartBtn.setStroke(0x000000, 2);
     restartBtn.setInteractive({ useHandCursor: true });
-    restartBtn.setDepth(101);
+    restartBtn.setDepth(201);
     
-    const restartText = this.add.text(144, 230, 'RESTART', {
-        fontSize: '14px',
-        fill: '#000',
+    const restartText = gameScene.add.text(144, 270, 'RESTART', {
+        fontSize: '16px',
+        fill: '#FFFFFF',
         fontFamily: 'Arial',
         fontStyle: 'bold'
     });
     restartText.setOrigin(0.5);
-    restartText.setDepth(102);
+    restartText.setDepth(202);
     
     // Share button
-    const shareBtn = this.add.rectangle(144, 270, 120, 30, 0x4CAF50);
+    const shareBtn = gameScene.add.rectangle(144, 320, 140, 35, 0x2196F3);
     shareBtn.setStroke(0x000000, 2);
     shareBtn.setInteractive({ useHandCursor: true });
-    shareBtn.setDepth(101);
+    shareBtn.setDepth(201);
     
-    const shareText = this.add.text(144, 270, 'SHARE', {
-        fontSize: '14px',
-        fill: '#fff',
+    const shareText = gameScene.add.text(144, 320, 'SHARE SCORE', {
+        fontSize: '16px',
+        fill: '#FFFFFF',
         fontFamily: 'Arial',
         fontStyle: 'bold'
     });
     shareText.setOrigin(0.5);
-    shareText.setDepth(102);
+    shareText.setDepth(202);
     
     // Main menu button
-    const menuBtn = this.add.rectangle(144, 310, 120, 30, 0x2196F3);
+    const menuBtn = gameScene.add.rectangle(144, 370, 140, 35, 0xFF9800);
     menuBtn.setStroke(0x000000, 2);
     menuBtn.setInteractive({ useHandCursor: true });
-    menuBtn.setDepth(101);
+    menuBtn.setDepth(201);
     
-    const menuText = this.add.text(144, 310, 'MAIN MENU', {
-        fontSize: '14px',
-        fill: '#fff',
+    const menuText = gameScene.add.text(144, 370, 'MAIN MENU', {
+        fontSize: '16px',
+        fill: '#FFFFFF',
         fontFamily: 'Arial',
         fontStyle: 'bold'
     });
     menuText.setOrigin(0.5);
-    menuText.setDepth(102);
+    menuText.setDepth(202);
+    
+    console.log('✅ Game over screen created successfully!'); // Debug log
     
     // Button interactions
     restartBtn.on('pointerdown', () => {
-        console.log('Restart button clicked'); // Debug log
-        this.scene.restart(); // Properly restart the scene
-    });
-    
-    // Also add pointerup for better UX
-    restartBtn.on('pointerup', () => {
-        this.scene.restart();
+        console.log('🔄 Restart button clicked'); // Debug log
+        gameScene.scene.restart();
     });
     
     shareBtn.on('pointerdown', () => {
-        console.log('Share button clicked'); // Debug log
-        const shareTextContent = `I scored ${score} points in Flappy Foot! Can you beat my score? Play at ${window.location.href}`;
+        console.log('📤 Share button clicked'); // Debug log
+        const shareTextContent = `I scored ${score} points in Flappy Foot! 🦶🎮 Can you beat my score? Play at ${window.location.href}`;
         if (navigator.share) {
             navigator.share({
                 title: 'Flappy Foot Score',
@@ -576,13 +608,16 @@ function showGameOverScreen() {
                 url: window.location.href
             });
         } else {
-            navigator.clipboard.writeText(shareTextContent);
-            alert('Score copied to clipboard!');
+            navigator.clipboard.writeText(shareTextContent).then(() => {
+                alert('Score shared! Link copied to clipboard 📋');
+            }).catch(() => {
+                alert(`Score: ${score} points! Share this link: ${window.location.href}`);
+            });
         }
     });
     
     menuBtn.on('pointerdown', () => {
-        console.log('Menu button clicked'); // Debug log
+        console.log('🏠 Menu button clicked'); // Debug log
         // Return to main menu
         if (gameInstance) {
             gameInstance.destroy(true);
@@ -592,12 +627,11 @@ function showGameOverScreen() {
         document.getElementById('game-container').style.display = 'none';
     });
     
-    // Also allow clicking anywhere to restart (like original)
-    this.input.on('pointerdown', (pointer, currentlyOver) => {
-        if (currentlyOver.length === 0) {
-            // Clicked on empty space, restart
-            this.scene.restart();
-        }
+    // Click anywhere else to restart
+    overlay.setInteractive();
+    overlay.on('pointerdown', () => {
+        console.log('🖱️ Clicked overlay to restart'); // Debug log
+        gameScene.scene.restart();
     });
 }
 
@@ -650,5 +684,7 @@ window.gameDebug = {
     getCurrentSeason,
     getSeasonEndDate,
     resetSeasonPass: () => { hasSeasonPass = false; },
-    restart: () => startGame()
+    restart: () => startGame(),
+    triggerGameOver: () => endGame(),
+    gameState: () => ({ gameOver, score, gameScene })
 };
