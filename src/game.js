@@ -293,7 +293,7 @@ function create() {
     // Background
     this.add.image(144, 256, 'background');
     // Create bird (foot) BEFORE pipes so pipes render over it
-    foot = this.physics.add.sprite(50, 256, 'foot-mid');
+    foot = this.physics.add.sprite(100, 256, 'foot-mid');
     foot.setScale(1.5);
     foot.body.setSize(17, 12); // Much smaller hitbox like original
     foot.body.setOffset(0, 2); // Center the hitbox
