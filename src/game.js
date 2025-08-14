@@ -520,10 +520,13 @@ function showGameOverScreen() {
     const overlay = gameScene.add.rectangle(144, 256, 288, 512, 0x000000, 0.8);
     overlay.setDepth(200);
     
-    // Game Over panel background (bigger and more visible)
-    const panel = gameScene.add.rectangle(144, 256, 240, 200, 0xFFFFFF);
-    panel.setStroke(0x000000, 3);
-    panel.setDepth(201);
+    // Game Over panel background - use graphics for border
+    const graphics = gameScene.add.graphics();
+    graphics.fillStyle(0xFFFFFF);
+    graphics.fillRect(24, 156, 240, 200); // x, y, width, height
+    graphics.lineStyle(3, 0x000000);
+    graphics.strokeRect(24, 156, 240, 200);
+    graphics.setDepth(201);
     
     // Game Over text
     const gameOverText = gameScene.add.text(144, 180, 'GAME OVER', {
@@ -545,12 +548,27 @@ function showGameOverScreen() {
     scoreDisplay.setOrigin(0.5);
     scoreDisplay.setDepth(202);
     
-    // Restart button
-    const restartBtn = gameScene.add.rectangle(144, 270, 140, 35, 0x4CAF50);
-    restartBtn.setStroke(0x000000, 2);
-    restartBtn.setInteractive({ useHandCursor: true });
-    restartBtn.setDepth(201);
+    // Create buttons as graphics objects
+    const buttonGraphics = gameScene.add.graphics();
+    buttonGraphics.setDepth(201);
     
+    // Restart button
+    buttonGraphics.fillStyle(0x4CAF50);
+    buttonGraphics.fillRect(74, 252, 140, 35); // Restart button
+    buttonGraphics.lineStyle(2, 0x000000);
+    buttonGraphics.strokeRect(74, 252, 140, 35);
+    
+    // Share button 
+    buttonGraphics.fillStyle(0x2196F3);
+    buttonGraphics.fillRect(74, 302, 140, 35); // Share button
+    buttonGraphics.strokeRect(74, 302, 140, 35);
+    
+    // Menu button
+    buttonGraphics.fillStyle(0xFF9800);
+    buttonGraphics.fillRect(74, 352, 140, 35); // Menu button
+    buttonGraphics.strokeRect(74, 352, 140, 35);
+    
+    // Button text
     const restartText = gameScene.add.text(144, 270, 'RESTART', {
         fontSize: '16px',
         fill: '#FFFFFF',
@@ -559,12 +577,6 @@ function showGameOverScreen() {
     });
     restartText.setOrigin(0.5);
     restartText.setDepth(202);
-    
-    // Share button
-    const shareBtn = gameScene.add.rectangle(144, 320, 140, 35, 0x2196F3);
-    shareBtn.setStroke(0x000000, 2);
-    shareBtn.setInteractive({ useHandCursor: true });
-    shareBtn.setDepth(201);
     
     const shareText = gameScene.add.text(144, 320, 'SHARE SCORE', {
         fontSize: '16px',
@@ -575,12 +587,6 @@ function showGameOverScreen() {
     shareText.setOrigin(0.5);
     shareText.setDepth(202);
     
-    // Main menu button
-    const menuBtn = gameScene.add.rectangle(144, 370, 140, 35, 0xFF9800);
-    menuBtn.setStroke(0x000000, 2);
-    menuBtn.setInteractive({ useHandCursor: true });
-    menuBtn.setDepth(201);
-    
     const menuText = gameScene.add.text(144, 370, 'MAIN MENU', {
         fontSize: '16px',
         fill: '#FFFFFF',
@@ -590,15 +596,28 @@ function showGameOverScreen() {
     menuText.setOrigin(0.5);
     menuText.setDepth(202);
     
+    // Create invisible interactive zones for buttons
+    const restartZone = gameScene.add.zone(144, 270, 140, 35);
+    restartZone.setInteractive({ useHandCursor: true });
+    restartZone.setDepth(203);
+    
+    const shareZone = gameScene.add.zone(144, 320, 140, 35);
+    shareZone.setInteractive({ useHandCursor: true });
+    shareZone.setDepth(203);
+    
+    const menuZone = gameScene.add.zone(144, 370, 140, 35);
+    menuZone.setInteractive({ useHandCursor: true });
+    menuZone.setDepth(203);
+    
     console.log('✅ Game over screen created successfully!'); // Debug log
     
     // Button interactions
-    restartBtn.on('pointerdown', () => {
+    restartZone.on('pointerdown', () => {
         console.log('🔄 Restart button clicked'); // Debug log
         gameScene.scene.restart();
     });
     
-    shareBtn.on('pointerdown', () => {
+    shareZone.on('pointerdown', () => {
         console.log('📤 Share button clicked'); // Debug log
         const shareTextContent = `I scored ${score} points in Flappy Foot! 🦶🎮 Can you beat my score? Play at ${window.location.href}`;
         if (navigator.share) {
@@ -616,7 +635,7 @@ function showGameOverScreen() {
         }
     });
     
-    menuBtn.on('pointerdown', () => {
+    menuZone.on('pointerdown', () => {
         console.log('🏠 Menu button clicked'); // Debug log
         // Return to main menu
         if (gameInstance) {
