@@ -532,7 +532,7 @@ function showGameOverScreen() {
     gameOverText.setOrigin(0.5);
     gameOverText.setDepth(202);
    
-    // Score display with recent and best
+    // Score display
     const scoreDisplay = gameScene.add.text(144, 220, `Score: ${score}`, {
         fontSize: '22px',
         fill: '#000000',
@@ -546,7 +546,7 @@ function showGameOverScreen() {
     const recentScoreText = gameScene.add.text(144, 250, `Recent: ${gameStats.recentScore}`, {
         fontSize: '18px',
         fill: '#FF69B4',  // Pink for recent
-        fontFamily: 'Press Start 2P',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     recentScoreText.setOrigin(0.5);
@@ -556,7 +556,7 @@ function showGameOverScreen() {
     const bestScoreText = gameScene.add.text(144, 280, `Best: ${gameStats.bestScore}`, {
         fontSize: '18px',
         fill: '#00BFFF',  // Blue for best
-        fontFamily: 'Press Start 2P',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     bestScoreText.setOrigin(0.5);
@@ -586,7 +586,7 @@ function showGameOverScreen() {
     const restartText = gameScene.add.text(144, 327, 'RESTART', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Press Start 2P',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     restartText.setOrigin(0.5);
@@ -595,7 +595,7 @@ function showGameOverScreen() {
     const shareText = gameScene.add.text(144, 372, 'SHARE', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Press Start 2P',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     shareText.setOrigin(0.5);
@@ -604,7 +604,7 @@ function showGameOverScreen() {
     const menuText = gameScene.add.text(144, 417, 'MAIN MENU', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Press Start 2P',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     menuText.setOrigin(0.5);
