@@ -2,9 +2,7 @@
 let walletConnection = null;
 let playerWallet = null;
 let gameInstance = null;
-let hasSeasonPass = false;
-let bestScore = parseInt(localStorage.getItem('flappyBestScore') || '0');
-let recentScore = 0;
+let hasSeasonPass = false; // Track if player paid for this season
 
 // Solana connection
 const connection = new solanaWeb3.Connection('https://api.devnet.solana.com');
@@ -24,6 +22,44 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// GameStats class for local storage management
+class GameStats {
+  constructor() {
+    this.currentScore = 0;
+    this.bestScore = parseInt(localStorage.getItem('flappyBestScore') || '0');
+    this.recentScore = 0;
+    this.totalGames = parseInt(localStorage.getItem('flappyTotalGames') || '0');
+    this.gameHistory = JSON.parse(localStorage.getItem('flappyGameHistory') || '[]');
+  }
+  updateScore(newScore) {
+    this.currentScore = newScore;
+    // Update your score display component here if needed
+  }
+  finishGame() {
+    this.recentScore = this.currentScore;
+    this.totalGames++;
+   
+    if (this.currentScore > this.bestScore) {
+      this.bestScore = this.currentScore;
+      localStorage.setItem('flappyBestScore', this.bestScore.toString());
+    }
+   
+    localStorage.setItem('flappyTotalGames', this.totalGames.toString());
+   
+    this.gameHistory.unshift(this.currentScore);
+    if (this.gameHistory.length > 10) {
+      this.gameHistory.pop();
+    }
+    localStorage.setItem('flappyGameHistory', JSON.stringify(this.gameHistory));
+  }
+  resetCurrentScore() {
+    this.currentScore = 0;
+  }
+}
+
+// Initialize game stats
+const gameStats = new GameStats();
 
 // Season helper functions
 function getCurrentSeason() {
@@ -219,6 +255,7 @@ function startGame() {
         gameInstance = null;
     }
     gameInstance = new Phaser.Game(config);
+    gameStats.resetCurrentScore();  // Reset for new game
 }
 // Game variables
 let foot, pipes, ground, groundTiles = [], score = 0, scoreText, gameOver = false, startTime;
@@ -352,15 +389,12 @@ function update() {
             pipe.scored = true;
             if (pipe.type === 'bottom') {
                 score++;
+                gameStats.updateScore(score);  // Update current score
                 scoreText.setText('Score: ' + score);
-                if (pipe.type === 'bottom') {
-                    score++;
-                    scoreText.setText('Score: ' + score);
-                    try {
-                        this.sound.play('point');
-                    } catch (e) {
-                        console.log('Audio play failed');
-                    }
+                try {
+                    this.sound.play('point');
+                } catch (e) {
+                    console.log('Audio play failed');
                 }
             }
         }
@@ -419,6 +453,8 @@ function endGame() {
     }
    
     gameOver = true;
+   
+    gameStats.finishGame();  // Update local storage with scores
    
     // Stop all physics immediately
     if (foot) {
@@ -490,21 +526,41 @@ function showGameOverScreen() {
     const gameOverText = gameScene.add.text(144, 180, 'GAME OVER', {
         fontSize: '28px',
         fill: '#FF0000',
-        fontFamily: 'Arial',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     gameOverText.setOrigin(0.5);
     gameOverText.setDepth(202);
    
-    // Score display
+    // Score display with recent and best
     const scoreDisplay = gameScene.add.text(144, 220, `Score: ${score}`, {
         fontSize: '22px',
         fill: '#000000',
-        fontFamily: 'Arial',
+        fontFamily: 'Press Start 2P',  // Retro font
         fontStyle: 'bold'
     });
     scoreDisplay.setOrigin(0.5);
     scoreDisplay.setDepth(202);
+   
+    // Recent score
+    const recentScoreText = gameScene.add.text(144, 250, `Recent: ${gameStats.recentScore}`, {
+        fontSize: '18px',
+        fill: '#FF69B4',  // Pink for recent
+        fontFamily: 'Press Start 2P',
+        fontStyle: 'bold'
+    });
+    recentScoreText.setOrigin(0.5);
+    recentScoreText.setDepth(202);
+   
+    // Best score
+    const bestScoreText = gameScene.add.text(144, 280, `Best: ${gameStats.bestScore}`, {
+        fontSize: '18px',
+        fill: '#00BFFF',  // Blue for best
+        fontFamily: 'Press Start 2P',
+        fontStyle: 'bold'
+    });
+    bestScoreText.setOrigin(0.5);
+    bestScoreText.setDepth(202);
    
     // Create buttons as graphics objects
     const buttonGraphics = gameScene.add.graphics();
@@ -512,58 +568,58 @@ function showGameOverScreen() {
    
     // Restart button
     buttonGraphics.fillStyle(0x4CAF50);
-    buttonGraphics.fillRect(74, 252, 140, 35); // Restart button
+    buttonGraphics.fillRect(74, 310, 140, 35); // Adjusted position for new texts
     buttonGraphics.lineStyle(2, 0x000000);
-    buttonGraphics.strokeRect(74, 252, 140, 35);
+    buttonGraphics.strokeRect(74, 310, 140, 35);
    
     // Share button
     buttonGraphics.fillStyle(0x2196F3);
-    buttonGraphics.fillRect(74, 302, 140, 35); // Share button
-    buttonGraphics.strokeRect(74, 302, 140, 35);
+    buttonGraphics.fillRect(74, 355, 140, 35);
+    buttonGraphics.strokeRect(74, 355, 140, 35);
    
     // Menu button
     buttonGraphics.fillStyle(0xFF9800);
-    buttonGraphics.fillRect(74, 352, 140, 35); // Menu button
-    buttonGraphics.strokeRect(74, 352, 140, 35);
+    buttonGraphics.fillRect(74, 400, 140, 35);
+    buttonGraphics.strokeRect(74, 400, 140, 35);
    
-    // Button text
-    const restartText = gameScene.add.text(144, 270, 'RESTART', {
+    // Button text with retro font
+    const restartText = gameScene.add.text(144, 327, 'RESTART', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Arial',
+        fontFamily: 'Press Start 2P',
         fontStyle: 'bold'
     });
     restartText.setOrigin(0.5);
     restartText.setDepth(202);
    
-    const shareText = gameScene.add.text(144, 320, 'SHARE SCORE', {
+    const shareText = gameScene.add.text(144, 372, 'SHARE', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Arial',
+        fontFamily: 'Press Start 2P',
         fontStyle: 'bold'
     });
     shareText.setOrigin(0.5);
     shareText.setDepth(202);
    
-    const menuText = gameScene.add.text(144, 370, 'MAIN MENU', {
+    const menuText = gameScene.add.text(144, 417, 'MAIN MENU', {
         fontSize: '16px',
         fill: '#FFFFFF',
-        fontFamily: 'Arial',
+        fontFamily: 'Press Start 2P',
         fontStyle: 'bold'
     });
     menuText.setOrigin(0.5);
     menuText.setDepth(202);
    
     // Create invisible interactive zones for buttons
-    const restartZone = gameScene.add.zone(144, 270, 140, 35);
+    const restartZone = gameScene.add.zone(144, 327, 140, 35);
     restartZone.setInteractive({ useHandCursor: true });
     restartZone.setDepth(203);
    
-    const shareZone = gameScene.add.zone(144, 320, 140, 35);
+    const shareZone = gameScene.add.zone(144, 372, 140, 35);
     shareZone.setInteractive({ useHandCursor: true });
     shareZone.setDepth(203);
    
-    const menuZone = gameScene.add.zone(144, 370, 140, 35);
+    const menuZone = gameScene.add.zone(144, 417, 140, 35);
     menuZone.setInteractive({ useHandCursor: true });
     menuZone.setDepth(203);
    
@@ -577,20 +633,7 @@ function showGameOverScreen() {
    
     shareZone.on('pointerdown', () => {
         console.log('📤 Share button clicked'); // Debug log
-        const shareTextContent = `I scored ${score} points in Flappy Foot! 🦶🎮 Can you beat my score? Play at ${window.location.href}`;
-        if (navigator.share) {
-            navigator.share({
-                title: 'Flappy Foot Score',
-                text: shareTextContent,
-                url: window.location.href
-            });
-        } else {
-            navigator.clipboard.writeText(shareTextContent).then(() => {
-                alert('Score shared! Link copied to clipboard 📋');
-            }).catch(() => {
-                alert(`Score: ${score} points! Share this link: ${window.location.href}`);
-            });
-        }
+        shareScore(gameStats);
     });
    
     menuZone.on('pointerdown', () => {
@@ -610,6 +653,39 @@ function showGameOverScreen() {
         console.log('🖱️ Clicked overlay to restart'); // Debug log
         gameScene.scene.restart();
     });
+}
+// Share Function
+function shareScore(gameStats) {
+  const text = `I just scored ${gameStats.recentScore} points in Flappy Foot! My best is ${gameStats.bestScore}. Can you beat it?`;
+ 
+  if (navigator.share) {
+    navigator.share({
+      title: 'Flappy Foot Score',
+      text: text,
+      url: window.location.href
+    });
+  } else {
+    navigator.clipboard.writeText(text + ' ' + window.location.href).then(() => {
+      alert('Score copied to clipboard!');
+    });
+  }
+}
+// Leaderboard Function
+function showLeaderboard(gameStats) {
+  const history = gameStats.gameHistory.slice(0, 5);
+  let message = `🏆 YOUR RECENT SCORES 🏆\n\n`;
+ 
+  if (history.length === 0) {
+    message += 'No games played yet!';
+  } else {
+    history.forEach((score, index) => {
+      message += `${index + 1}. ${score} points\n`;
+    });
+    message += `\nBest Score: ${gameStats.bestScore}`;
+    message += `\nTotal Games: ${gameStats.totalGames}`;
+  }
+ 
+  alert(message);
 }
 async function submitScore(finalScore) {
     try {
@@ -639,7 +715,7 @@ async function submitScore(finalScore) {
         } else {
             console.log('Score submitted:', finalScore);
            
-            // Still store the attempt for analytics
+            // Still update the attempt for analytics
             await db.ref(`seasonal-scores/${currentSeason}/${walletKey}/attempts`).push({
                 score: finalScore,
                 timestamp: Date.now()
